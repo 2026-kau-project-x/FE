@@ -49,3 +49,6 @@ app.*.map.json
 
 # 실제 API 키 (env.json.example을 복사해서 만들 것, 커밋 금지)
 env.json
+
+# 개인 AI 코딩 툴 설정 (팀 공유 대상 아님)
+.claude/
