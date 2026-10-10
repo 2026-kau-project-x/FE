@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- 네트워크: TMAP 경로·역지오코딩, BE 상태 보고. 디버그 매니페스트에만 있으면 릴리스 APK 에서 통신이 막힌다 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <!-- GPS: 목적지·현재위치 획득 (FE-1) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
