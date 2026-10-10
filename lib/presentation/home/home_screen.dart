@@ -194,6 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
         GeoPoint(destination.latitude, destination.longitude),
         previewRoute: route, // 이미 받아둔 경로를 재사용 (TMAP 중복 호출 방지)
         fallbackOrigin: current == null ? null : GeoPoint(current.latitude, current.longitude),
+        destinationName: _destinationAddress, // BE 이동 기록용 (역지오코딩 실패 시 null)
       );
       if (!mounted) return;
       // Navigator.push: 새 화면을 스택에 쌓아 올린다(뒤로가기 하면 이 화면으로 돌아옴).

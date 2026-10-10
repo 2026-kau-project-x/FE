@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/backend/trip_api_client.dart';
 import 'core/ble/ble_service.dart';
 import 'core/geocoding/reverse_geocoding_client.dart';
 import 'core/location/location_service.dart';
@@ -30,6 +31,10 @@ import 'presentation/home/home_screen.dart';
 /// `--dart-define-from-file=env.json` 옵션으로 넘긴다.
 const _tmapAppKey = String.fromEnvironment('TMAP_APP_KEY');
 
+/// BE(FastAPI) 주소. env.json 의 `BE_BASE_URL` 로 주입한다 (예: http://localhost:8000).
+/// 비어있으면 BE 보고를 끄고 앱 단독으로 동작한다 — BE 서버 없이도 개발할 수 있게.
+const _beBaseUrl = String.fromEnvironment('BE_BASE_URL');
+
 void main() {
   final locationService = LocationService();
   final bleService = GloveBleService();
@@ -42,11 +47,14 @@ void main() {
       ? MockReverseGeocodingClient()
       : TmapReverseGeocodingClient(appKey: _tmapAppKey);
 
+  final tripApi = _beBaseUrl.isEmpty ? null : HttpTripApiClient(baseUrl: _beBaseUrl);
+
   runApp(MyApp(
     locationService: locationService,
     bleService: bleService,
     routeClient: routeClient,
     geocodingClient: geocodingClient,
+    tripApi: tripApi,
   ));
 }
 
@@ -59,12 +67,16 @@ class MyApp extends StatelessWidget {
     required this.bleService,
     required this.routeClient,
     required this.geocodingClient,
+    this.tripApi,
   });
 
   final LocationService locationService;
   final GloveBleService bleService;
   final RouteClient routeClient;
   final ReverseGeocodingClient geocodingClient;
+
+  /// null 이면 BE 연동 없음 (테스트·BE 미기동 시)
+  final TripApiClient? tripApi;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +98,7 @@ class MyApp extends StatelessWidget {
             routeClient: routeClient,
             locationService: locationService,
             bleService: bleService,
+            tripApi: tripApi,
           ),
         ),
       ],

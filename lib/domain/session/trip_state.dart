@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/backend/trip_api_client.dart';
 import '../../core/ble/ble_service.dart';
 import '../../core/location/location_service.dart';
 import '../../core/routing/route_models.dart';
@@ -9,6 +10,7 @@ import '../../core/routing/tmap_route_client.dart';
 import '../navigation/command_engine.dart';
 import '../navigation/navigation_command.dart';
 import '../navigation/off_route_detector.dart';
+import 'backend_trip_sync.dart';
 
 /// 01장 "공통 이동상태"의 Phase 1 서브셋. Driver 관련 상태(Vehicle Approaching 등)는
 /// Phase 4에서 추가된다.
@@ -40,12 +42,21 @@ class TripSession extends ChangeNotifier {
     required this.locationService,
     required this.bleService,
     this.offRouteDetector = const OffRouteDetector(),
-  });
+    TripApiClient? tripApi,
+  }) : _backendSync = tripApi == null ? null : BackendTripSync(tripApi);
 
   final RouteClient routeClient;
   final LocationService locationService;
   final GloveBleService bleService;
   final OffRouteDetector offRouteDetector;
+
+  /// BE 상태 보고기. BE 주소(BE_BASE_URL)를 안 넣고 실행하면 null → 보고 없이 앱 단독 동작.
+  /// `?.` 로만 호출하므로 null 이어도 안내 로직은 똑같이 돈다.
+  final BackendTripSync? _backendSync;
+
+  /// 테스트에서 BE 보고가 끝날 때까지 기다리기 위한 getter (BE 미설정이면 즉시 완료).
+  @visibleForTesting
+  Future<void> get backendIdle => _backendSync?.idle ?? Future.value();
 
   // 아래 필드들은 전부 "private 변수 + public getter" 쌍으로 되어있다.
   // 외부에서는 읽기만 가능하고(getter), 값을 바꾸는 건 이 클래스 내부
@@ -70,6 +81,7 @@ class TripSession extends ChangeNotifier {
   CommandEngine? _commandEngine;
   StreamSubscription<GeoPoint>? _locationSub;
   GeoPoint? _destination;
+  String? _destinationName;
 
   /// 미리보기 경로의 출발점(탭 당시 GPS)과 실제 출발 시점 GPS가 이 값(m) 이상 벌어지면
   /// 캐시된 경로를 신뢰하지 않고 다시 받아온다. OffRouteDetector 임계값(25m)보다 살짝 크게
@@ -97,8 +109,11 @@ class TripSession extends ChangeNotifier {
     GeoPoint destination, {
     WalkingRoute? previewRoute,
     GeoPoint? fallbackOrigin,
+    String? destinationName,
   }) async {
     _destination = destination;
+    // 재탐색 때는 이름을 안 넘기므로 처음 받은 이름을 유지한다
+    if (destinationName != null) _destinationName = destinationName;
     _lastError = null;
     _phase = TripPhase.routing;
     notifyListeners(); // "경로 계산 중" 상태로 화면을 즉시 갱신
@@ -134,6 +149,11 @@ class TripSession extends ChangeNotifier {
 
       _phase = TripPhase.navigating;
       notifyListeners();
+      _backendSync?.tripStarted(
+        origin: origin,
+        destination: destination,
+        destinationName: _destinationName,
+      );
 
       // 이전에 구독 중이던 스트림이 있으면 먼저 정리하고 새로 구독한다
       // (reroute()로 재시작하는 경우를 대비).
@@ -163,6 +183,7 @@ class TripSession extends ChangeNotifier {
     final engine = _commandEngine;
     if (route == null || engine == null) return; // 아직 경로가 없으면 할 일이 없음
 
+    final previousPhase = _phase;
     final NavigationCommand command;
     if (offRouteDetector.isOffRoute(point, route)) {
       // 경로 이탈이 CommandEngine의 정상 판단보다 항상 우선한다.
@@ -174,6 +195,9 @@ class TripSession extends ChangeNotifier {
           ? TripPhase.arrived
           : TripPhase.navigating;
     }
+
+    // 상태가 바뀌었을 때만 BE 에 보고 (내부에서 비동기로 처리 — 여기서 기다리지 않음)
+    if (_phase != previousPhase) _backendSync?.phaseChanged(_phase);
 
     // [공부 포인트] 명령이 "바뀌었을 때만" 화면 갱신과 BLE 전송을 한다.
     // GPS 스트림은 5m마다 계속 이벤트를 내는데, 그때마다 똑같은 "직진"을
@@ -213,12 +237,18 @@ class TripSession extends ChangeNotifier {
 
   /// 사용자가 "안내 종료"를 누르거나 도착했을 때 모든 상태를 초기 상태로 되돌린다.
   void endTrip() {
+    // 초기화 전에 "도착 후 종료(COMPLETED)"인지 "도중 종료(CANCELLED)"인지 BE 에 알린다.
+    // 출발 전(idle)에 불린 경우는 BE 에 만든 이동이 없으니 보고하지 않는다.
+    if (_phase != TripPhase.idle) {
+      _backendSync?.tripEnded(arrived: _phase == TripPhase.arrived);
+    }
     _locationSub?.cancel();
     _phase = TripPhase.idle;
     _route = null;
     _commandEngine = null;
     _currentCommand = null;
     _destination = null;
+    _destinationName = null;
     notifyListeners();
   }
 
