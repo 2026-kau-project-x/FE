@@ -17,6 +17,7 @@ flutter test
 |---|---|---|
 | `TMAP_APP_KEY` | TMAP 앱키 | Mock 경로·주소로 동작 |
 | `BE_BASE_URL` | BE 주소 (예: `http://localhost:8000`) | BE 보고 끔 (앱 단독) |
+| `BE_API_KEY` | BE `.env` 의 `API_KEY` 와 같은 값 (`X-API-Key` 헤더) | 헤더 안 보냄 (BE 인증 꺼진 상태용) |
 
 `BE_BASE_URL` 은 실행 환경마다 다르다:
 - 웹(Chrome)·Windows: `http://localhost:8000`
@@ -38,6 +39,7 @@ core/
   backend/trip_api_client.dart  BE /api/v1/trips 호출 (생성·상태 전이)
 domain/
   navigation/                   CommandEngine(도착·룩어헤드 15 m), 7종 명령, 경로이탈(25 m)
+                                 이탈은 연속 2회 판정 시 확정 (GPS 튐 오탐 방지, TripSession.offRouteConfirmCount)
   session/trip_state.dart       TripSession: 위치→명령→BLE 를 지휘하는 상태머신
   session/backend_trip_sync.dart 앱 상태 → BE 상태 보고 (순서 보장, 실패해도 안내 계속)
 presentation/                   home(지도 탭→경로 미리보기→출발), navigating, widgets
