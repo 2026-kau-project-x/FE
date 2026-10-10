@@ -7,6 +7,7 @@ import 'package:mobility_assist_app/core/ble/ble_service.dart';
 import 'package:mobility_assist_app/core/location/location_service.dart';
 import 'package:mobility_assist_app/core/routing/route_models.dart';
 import 'package:mobility_assist_app/core/routing/tmap_route_client.dart';
+import 'package:mobility_assist_app/domain/navigation/navigation_command.dart';
 import 'package:mobility_assist_app/domain/session/trip_state.dart';
 
 /// TripSession 이 앱 상태 변화를 BE 에 올바른 순서로 보고하는지 검증한다.
@@ -87,6 +88,7 @@ void main() {
     await session.startTrip(destination, destinationName: '테스트 목적지');
     await walkTo(session, onRoute); // 계속 WALKING 이라 추가 보고 없음
     await walkTo(session, offRoute);
+    await walkTo(session, offRoute); // 연속 2회째에 이탈 확정
     await walkTo(session, backOnRoute);
     await walkTo(session, destination);
     expect(session.phase, TripPhase.arrived);
@@ -110,6 +112,7 @@ void main() {
 
     await session.startTrip(destination);
     await walkTo(session, offRoute);
+    await walkTo(session, offRoute);
     await session.reroute(); // 경로를 다시 받아 navigating 으로 복귀
     await session.backendIdle;
     session.endTrip();
@@ -124,11 +127,29 @@ void main() {
     ]);
   });
 
+  test('GPS 가 한 번만 튀면 이탈로 보지 않는다 (연속 2회부터 확정)', () async {
+    final api = FakeTripApi();
+    final session = newSession(api);
+
+    await session.startTrip(destination);
+    await walkTo(session, offRoute); // 1회: 보류
+    expect(session.phase, TripPhase.navigating);
+    expect(session.currentCommand, isNot(NavigationCommand.offRoute));
+    await walkTo(session, onRoute); // 복귀 → 연속 횟수 초기화
+    await walkTo(session, offRoute); // 다시 1회: 여전히 보류
+    expect(session.phase, TripPhase.navigating);
+    await walkTo(session, offRoute); // 연속 2회: 확정
+    expect(session.phase, TripPhase.rerouting);
+    expect(session.currentCommand, NavigationCommand.offRoute);
+    expect(api.calls, ['create:null', '42:WALKING', '42:WAITING']);
+  });
+
   test('BE 가 꺼져 있어도 안내는 그대로 동작한다', () async {
     final api = FakeTripApi(failCreate: true);
     final session = newSession(api);
 
     await session.startTrip(destination);
+    await walkTo(session, offRoute);
     await walkTo(session, offRoute);
     expect(session.phase, TripPhase.rerouting); // 안내 로직은 정상
     await walkTo(session, destination);

@@ -42,6 +42,7 @@ class TripSession extends ChangeNotifier {
     required this.locationService,
     required this.bleService,
     this.offRouteDetector = const OffRouteDetector(),
+    this.offRouteConfirmCount = 2,
     TripApiClient? tripApi,
   }) : _backendSync = tripApi == null ? null : BackendTripSync(tripApi);
 
@@ -49,6 +50,15 @@ class TripSession extends ChangeNotifier {
   final LocationService locationService;
   final GloveBleService bleService;
   final OffRouteDetector offRouteDetector;
+
+  /// 이탈 판정이 "연속으로" 이 횟수만큼 나와야 경로 이탈로 확정한다. (07장 이슈 #5)
+  /// 실내·고층 근처에서 GPS 가 한 번 튀었을 뿐인데 장갑이 "경로이탈" 진동을 내는 오탐을 줄인다.
+  /// 위치 스트림이 5 m 마다 오므로 2회 = 대략 5~10 m 더 걸은 뒤 확정되는 셈이다.
+  /// 1 로 두면 예전처럼 한 번만 벗어나도 즉시 이탈 처리한다.
+  final int offRouteConfirmCount;
+
+  /// 지금까지 연속으로 이탈 판정이 나온 횟수. 경로 위로 돌아오면 0 으로 초기화.
+  int _offRouteStreak = 0;
 
   /// BE 상태 보고기. BE 주소(BE_BASE_URL)를 안 넣고 실행하면 null → 보고 없이 앱 단독 동작.
   /// `?.` 로만 호출하므로 null 이어도 안내 로직은 똑같이 돈다.
@@ -112,6 +122,7 @@ class TripSession extends ChangeNotifier {
     String? destinationName,
   }) async {
     _destination = destination;
+    _offRouteStreak = 0;
     // 재탐색 때는 이름을 안 넘기므로 처음 받은 이름을 유지한다
     if (destinationName != null) _destinationName = destinationName;
     _lastError = null;
@@ -185,7 +196,16 @@ class TripSession extends ChangeNotifier {
 
     final previousPhase = _phase;
     final NavigationCommand command;
-    if (offRouteDetector.isOffRoute(point, route)) {
+    final offRouteNow = offRouteDetector.isOffRoute(point, route);
+    _offRouteStreak = offRouteNow ? _offRouteStreak + 1 : 0;
+
+    if (offRouteNow && _offRouteStreak < offRouteConfirmCount) {
+      // 아직 "한 번 튄 것"일 수 있다 → 이번 위치는 판단을 보류하고 직전 명령을 유지한다.
+      // (이 지점 기준으로 CommandEngine 을 돌리면 엉뚱한 회전 명령이 나갈 수 있어 계산 자체를 건너뛴다)
+      return;
+    }
+
+    if (offRouteNow) {
       // 경로 이탈이 CommandEngine의 정상 판단보다 항상 우선한다.
       command = NavigationCommand.offRoute;
       _phase = TripPhase.rerouting;
