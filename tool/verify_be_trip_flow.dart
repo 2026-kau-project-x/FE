@@ -16,21 +16,23 @@ import 'package:dio/dio.dart';
 import 'package:mobility_assist_app/core/backend/trip_api_client.dart';
 import 'package:mobility_assist_app/core/routing/route_models.dart';
 
-String _baseUrl(List<String> args) {
-  if (args.isNotEmpty) return args.first;
+Map<String, dynamic> _env() {
   final file = File('env.json');
-  if (file.existsSync()) {
-    final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-    final url = json['BE_BASE_URL'] as String?;
-    if (url != null && url.isNotEmpty) return url;
-  }
-  return 'http://localhost:8000';
+  if (!file.existsSync()) return const {};
+  return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+}
+
+String _baseUrl(List<String> args, Map<String, dynamic> env) {
+  if (args.isNotEmpty) return args.first;
+  final url = env['BE_BASE_URL'] as String?;
+  return (url != null && url.isNotEmpty) ? url : 'http://localhost:8000';
 }
 
 void main(List<String> args) async {
-  final baseUrl = _baseUrl(args);
+  final env = _env();
+  final baseUrl = _baseUrl(args, env);
   print('BE: $baseUrl');
-  final api = HttpTripApiClient(baseUrl: baseUrl);
+  final api = HttpTripApiClient(baseUrl: baseUrl, apiKey: env['BE_API_KEY'] as String? ?? '');
 
   try {
     final id = await api.createTrip(

@@ -35,6 +35,9 @@ const _tmapAppKey = String.fromEnvironment('TMAP_APP_KEY');
 /// 비어있으면 BE 보고를 끄고 앱 단독으로 동작한다 — BE 서버 없이도 개발할 수 있게.
 const _beBaseUrl = String.fromEnvironment('BE_BASE_URL');
 
+/// BE 의 API_KEY 와 같은 값. BE 가 인증을 끈 상태(로컬 기본)면 비워둔다.
+const _beApiKey = String.fromEnvironment('BE_API_KEY');
+
 void main() {
   final locationService = LocationService();
   final bleService = GloveBleService();
@@ -47,7 +50,9 @@ void main() {
       ? MockReverseGeocodingClient()
       : TmapReverseGeocodingClient(appKey: _tmapAppKey);
 
-  final tripApi = _beBaseUrl.isEmpty ? null : HttpTripApiClient(baseUrl: _beBaseUrl);
+  final tripApi = _beBaseUrl.isEmpty
+      ? null
+      : HttpTripApiClient(baseUrl: _beBaseUrl, apiKey: _beApiKey);
 
   runApp(MyApp(
     locationService: locationService,

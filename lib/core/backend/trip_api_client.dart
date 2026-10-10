@@ -48,14 +48,18 @@ enum BackendTripStatus {
 /// - 웹(Chrome)·Windows 데스크톱: http://localhost:8000
 /// - Android 에뮬레이터: http://10.0.2.2:8000 (에뮬레이터 안의 localhost 는 에뮬레이터 자신이다)
 /// - 실기기: 같은 Wi-Fi 의 PC IP (예: http://192.168.0.10:8000)
+///
+/// [apiKey] BE 에 API_KEY 가 설정돼 있으면 같은 값을 넣는다 → 모든 요청에 `X-API-Key` 헤더로 실린다.
+/// 비어 있으면 헤더를 보내지 않는다 (BE 도 인증을 끈 로컬 개발 상태).
 class HttpTripApiClient implements TripApiClient {
-  HttpTripApiClient({required String baseUrl, Dio? dio})
+  HttpTripApiClient({required String baseUrl, String apiKey = '', Dio? dio})
       : _dio = dio ??
             Dio(BaseOptions(
               baseUrl: baseUrl,
               // 서버가 느리거나 꺼져 있을 때 오래 붙잡혀 있지 않도록 짧게 잡는다
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 5),
+              headers: apiKey.isEmpty ? null : {'X-API-Key': apiKey},
             ));
 
   final Dio _dio;
