@@ -1,0 +1,20 @@
+# develop/main 푸시와 PR 마다 정적 분석 + 테스트. TMAP 키 없이 Mock 으로 돌기 때문에 시크릿이 필요 없다.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
