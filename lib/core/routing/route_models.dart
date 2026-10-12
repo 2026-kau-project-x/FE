@@ -73,6 +73,7 @@ class WalkingRoute {
     required this.turnPoints,
     this.totalDistanceMeters,
     this.totalTimeSeconds,
+    this.stairsMeters = 0,
   });
 
   /// 경로를 이루는 좌표들의 연속(polyline). 지도에 선을 그리거나(home_screen.dart),
@@ -89,6 +90,12 @@ class WalkingRoute {
   /// 온보딩 화면(home_screen.dart)에서는 null이면 그냥 해당 표시를 생략한다.
   final double? totalDistanceMeters;
   final int? totalTimeSeconds;
+
+  /// 경로에 포함된 **계단 구간의 총 길이(m)**. TMAP 응답 LineString 의
+  /// facilityType == 17(계단) 구간 distance 를 합친 값이다.
+  /// 계단 회피(avoidStairs)로 요청해도 우회로가 없으면 0 이 아닐 수 있어서,
+  /// 화면에서 "계단 N m 포함" 경고를 띄우는 근거로 쓴다.
+  final double stairsMeters;
 
   /// 편의 getter: 경로의 마지막 좌표 = 목적지. points가 비어있지 않다는
   /// 전제 하에 안전하다 (TmapRouteClient가 빈 경로면 애초에 예외를 던진다).

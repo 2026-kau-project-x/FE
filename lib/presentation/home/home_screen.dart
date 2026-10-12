@@ -572,9 +572,23 @@ class _RoutePanel extends StatelessWidget {
     final minutes = r.totalTimeSeconds != null ? (r.totalTimeSeconds! / 60).ceil() : null;
     final meters = r.totalDistanceMeters?.round();
 
-    return Text(
+    final stairs = r.stairsMeters.round();
+    final summary = Text(
       minutes != null && meters != null ? '도보 약 $minutes분 · ${meters}m' : '도보 경로',
       style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    );
+    // 계단을 피하는 경로를 요청했는데도 계단이 남아 있으면(우회로 없음) 미리 알린다.
+    if (stairs <= 0) return summary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        summary,
+        const SizedBox(height: 2),
+        Text(
+          '⚠ 계단 구간 약 ${stairs}m 포함',
+          style: textTheme.bodySmall?.copyWith(color: Colors.orange.shade800, fontWeight: FontWeight.w600),
+        ),
+      ],
     );
   }
 }

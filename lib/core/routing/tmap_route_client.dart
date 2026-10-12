@@ -17,9 +17,13 @@ import 'route_models.dart';
 ///      수 있다.
 /// main.dart에서 TMAP_APP_KEY 유무에 따라 둘 중 뭘 쓸지 결정한다.
 abstract class RouteClient {
+  /// [avoidStairs] 가 true 면 계단이 없는 경로를 요청한다 (기본값 true).
+  /// 이동 중 추가 지원이 필요한 고령자·아동이 주 대상이라 계단 회피를 기본으로
+  /// 한다. 대신 우회 때문에 경로가 꽤 길어질 수 있다(실측: 1.5 km → 3 km).
   Future<WalkingRoute> fetchWalkingRoute({
     required GeoPoint origin,
     required GeoPoint destination,
+    bool avoidStairs = true,
   });
 }
 
@@ -31,6 +35,7 @@ class MockRouteClient implements RouteClient {
   Future<WalkingRoute> fetchWalkingRoute({
     required GeoPoint origin,
     required GeoPoint destination,
+    bool avoidStairs = true,
   }) async {
     // 실제 API처럼 약간의 지연을 흉내 내서, 로딩 상태 UI(스피너 등)도
     // 자연스럽게 테스트해볼 수 있게 한다.
@@ -89,6 +94,7 @@ class TmapRouteClient implements RouteClient {
   Future<WalkingRoute> fetchWalkingRoute({
     required GeoPoint origin,
     required GeoPoint destination,
+    bool avoidStairs = true,
   }) async {
     final response = await _dio.post(
       '/tmap/routes/pedestrian',
@@ -103,7 +109,8 @@ class TmapRouteClient implements RouteClient {
         'endName': '목적지',
         'reqCoordType': 'WGS84GEO', // 우리가 흔히 쓰는 위경도(WGS84) 좌표계로 요청
         'resCoordType': 'WGS84GEO', // 응답도 같은 좌표계로 받기
-        'searchOption': '0',
+        // 탐색 옵션 (실측 확인): 0 = 추천(계단 포함 가능), 30 = 최단거리 + 계단 제외.
+        'searchOption': avoidStairs ? '30' : '0',
       },
     );
 
@@ -122,7 +129,27 @@ class TmapRouteClient implements RouteClient {
       turnPoints: _extractTurnPoints(geoJson),
       totalDistanceMeters: summary.$1,
       totalTimeSeconds: summary.$2,
+      stairsMeters: _extractStairsMeters(geoJson),
     );
+  }
+
+  /// TMAP 응답에서 계단 구간(LineString 의 facilityType == 17) 길이 합계를 구한다.
+  /// facilityType 값은 응답에 문자열("17")로 오므로 문자열로 비교한다.
+  double _extractStairsMeters(Map<String, dynamic> geoJson) {
+    final features = geoJson['features'] as List<dynamic>? ?? const [];
+    var total = 0.0;
+    for (final feature in features) {
+      final f = feature as Map<String, dynamic>;
+      final geometry = f['geometry'] as Map<String, dynamic>?;
+      final properties = f['properties'] as Map<String, dynamic>?;
+      if (geometry == null || geometry['type'] != 'LineString' || properties == null) {
+        continue;
+      }
+      if ('${properties['facilityType']}' == '17') {
+        total += (properties['distance'] as num?)?.toDouble() ?? 0;
+      }
+    }
+    return total;
   }
 
   /// SP(출발) 포인트의 properties에 함께 실려오는 전체 거리(m)/시간(초) 요약값을 뽑는다.
